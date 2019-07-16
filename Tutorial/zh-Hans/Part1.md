@@ -1,52 +1,37 @@
 ## Part 1: 关注点分离
 
-In a traditional app, it is common practice to split the logic into three layers - the Model, View and Controller<sup><a id="reference1"></a>[[1]](#footnote1)</sup>. Games can also be divided into three similar layers:
 传统的应用中， 把逻辑分离到不同的层次中是很普遍的做法——模型层（Model）,视图层（View）和控制层(Controller)<sup><a id="reference1"></a>[[1]](#footnote1)</sup>。游戏的逻辑也可以被分离到三个类似的层中：
 
-
-* Platform Layer - Platform-specific code to integrate with the host operating system.
 * 平台层 - 与主机操作系统平台相关的代码
-* Engine - Platform-independent game functions like asset loaders, rendering, physics, pathfinding AI, etc.
 * 引擎层 - 与平台无关的游戏相关功能：资源加载、图形渲染、物理、寻路AI等。
-* Game Logic - Gameplay and graphics specific to this game. Tightly coupled to a particular engine.
 * 游戏层 - 和当前游戏有关的玩法、图片。松耦合于特定的引擎。
 
 <img src="Images/Architecture.png" width="793" alt="Traditional app architecture vs game architecture">
 
-Apple would ideally like you to build your game or engine using frameworks like GameKit, SpriteKit and SceneKit. These are powerful and easy-to-use, but doing so shackles your game completely to Apple's platforms.
 Apple非常希望你使用GameKit，SpriteKit和SceneKit等框架构建游戏或引擎。它们强大且易用，然而这样做将会把你的游戏完全限定在Apple的平台内。
 
-In practice, few game developers do this because Apple alone doesn't represent a large enough share of the games market. A popular alternative is to use a 3rd party framework like Unity or Unreal that provide a cross-platform engine, and have platform layers for many different systems. This frees you from Apple exclusivity, but ties you into a 3rd party ecosystem instead.
 在实践中，也很少有开发者会这样做，因为仅苹果一家厂商并不能代表市场中足够大的份额。一种流行的替代方案是使用第三方的框架，像是Unity和Unreal这样的跨平台引擎，为很多不同的操作系统提供了很多的平台层。这个方案可以使你摆脱Apple的垄断，让你和第三方生态系统联系起来。
 
-In this tutorial we are choosing a third path: We'll create a very minimal platform layer for iOS using UIKit, then build both the game and engine from scratch using pure Swift, with no external dependencies.
 在这篇教程中，我们选择第三条路：使用UIKit为iOS开发一个最小化的平台层，接着从头开始，用纯Swift构建游戏层和引擎层，不引入额外的依赖。
 
 ### 项目配置
 
-Modern games require a fairly complex interface with their host operating system in order to implement hardware accelerated graphics, sound and user input. But fortunately, *we aren't building a modern game*.
 通常来说，现代的游戏需要一个相当复杂的主机操作系统接口层，用于实现硬件图形加速、声音和用户输入。幸运的是，*我们并没有在构建一个现代游戏*。
 
-In the era of Wolfenstein 3D, computers were mainly intended as business machines, and did almost nothing for you as a game developer. We're going to build this game using a similar approach to what they used in the MSDOS days (while taking advantage of modern advancements such as fast floating-point math and 32-bit color).
 在《德军总部3D》的年代，计算机主要作为商用机器，并没有为游戏开发者提供什么助力。我们将使用MS-DOS时期类似的方式来构建这个游戏（同时会利用到一些现代技术，像是快速浮点数运算和32位色）。
 
-Start by creating a new *Single View iOS App* project in Xcode. To keep ourselves honest, we're going to put the engine code in a separate module, creating an "air gap" between the game code and the code that interacts with iOS.
 首先，在Xcode中创建一个新的 *Single View iOS App* 项目。为了践行分层思想，我们将会把引擎的代码放入一个单独的模块中，在形式上，将游戏层和平台层的代码分开。
 
-To create the Engine module, go to the Targets tab and add a new target of type *Cocoa Touch Framework* called "Engine". Xcode will automatically link this in to your main app. It will also create a C header file in the Engine folder called `Engine.h` which imports UIKit. We aren't going to be using UIKit in the engine, so you can go ahead and delete `Engine.h`.
 要创建引擎模块，进入Targets选项卡并添加一个新目标，类型为 *Cocoa Touch Framework*，命名为“Engine”。Xcode将会自动的将这个模块链接到你的主应用中，同时也会在Engine文件夹创建一个名为`Engine.h`的C语言头文件，这个文件引入了UIKit。我们不会在引擎中使用UIKit，所以你可以将这个文件删掉。
 
-If you aren't confident creating a project with a nested framework (or if you just don't feel like setting up a project from scratch) you can download the base project from [here](https://github.com/nicklockwood/RetroRampage/archive/Start.zip).
-如果你对于创建一个嵌套框架的项目没有什么自信（或者不想从头开始创建一个项目），你可以从[这里](https://github.com/nicklockwood/RetroRampage/archive/Start.zip)下载起步项目。
+如果你觉得从头创建一个嵌套框架的项目有些许困难（或者不想从头开始创建一个项目），你可以从[这里](https://github.com/nicklockwood/RetroRampage/archive/Start.zip)下载起步项目。
 
-Here is how the project structure should look:
-下图是项目的结构图：
+下图展示了整个项目的结构：
 
 <img src="Images/ProjectStructure.png" width="271" alt="Initial project structure">
 
 ### 显示设置 
 
-Open `ViewController.swift` and replace its contents with the following:
 打开 `ViewController.swift` 并将内容替换为以下代码：
 
 ```swift
@@ -73,15 +58,12 @@ class ViewController: UIViewController {
 }
 ```
 
-Now run the app. If all has gone well you should see the black background of the `UIImageView` filling the whole screen.
 现在运行应用。如果一切正常，你现在应该看到了`UIImageView`的黑色背景填满了整个屏幕。
 
-### Pixel Pushing
+### 进入像素的世界
 
-Apps display views. Games typically deal with sprites or polygons. We are going to be working directly with *pixels*. Everything you see on screen is made up of pixels, and on a modern system, pixels are usually stored as 4 bytes<sup><a id="reference2"></a>[[2]](#footnote2)</sup> - one byte for each of the red, green, blue and alpha channels.
 应用都会展示视图。游戏通常会处理精灵或多边形。我们将会直接和*像素*沟通。你在屏幕上看到的任何东西都是由像素构成的，并且，在现代操作系统中，像素通常用4个字节<sup><a id="reference2"></a>[[2]](#footnote2)</sup>存放——4个字节分别对应4个通道：红、绿，蓝和透明度(alpha)。
 
-UIKit provides the `UIColor` class, which treats those channels as floating-point values in the range 0.0 to 1.0. This is a convenient abstraction, but it's an expensive way to store colors and it couples us to UIKit, so we'll create our own `Color` type instead. Create a new file called `Color.swift` in the Engine module with the following contents<sup><a id="reference3"></a>[[3]](#footnote3)</sup>:
 UIKit提供了`UIColor`类，这个类用浮点数0.0到1.0表示这4个通道。这是一种方便的抽象，但是却是一种成本高昂的颜色储存方式，同时会让我们和UIKit耦合起来，所以我们将会创建自己的`Color`类型。在Engine模块中创建一个名为`Color.swift`的新文件，内容如下<sup><a id="reference3"></a>[[3]](#footnote3)</sup>：
 
 ```swift
@@ -97,7 +79,6 @@ public struct Color {
 }
 ```
 
-Since we're mostly going to be dealing with opaque colors, we've defaulted the alpha value to 255 (no transparency) in the initializer. In the same file, add some common color constants, which will be useful later<sup><a id="reference4"></a>[[4]](#footnote4)</sup>:
 由于我们主要处理不透明的颜色，因此我们在将alpha值默认初始化为255（无透明度）。在同一个文件中，添加一些常见的颜色常量，稍后会有用<sup><a id="reference4"></a>[[4]](#footnote4)</sup>：
 
 ```swift
@@ -112,7 +93,6 @@ public extension Color {
 }
 ```
 
-Now that the engine has a way to represent a pixel color, we need a type to represent an entire image. We'll call this `Bitmap` to avoid confusion with `UIImage`. Create a new file called `Bitmap.swift` in the Engine module with the following contents:
 现在引擎有可以表示像素颜色的方法了，我们还需要一种类型来表示整个图像。我们将它称为`Bitmap`避免与`UIImage`混淆。在Engine模块中创建一个名为Bitmap.swift的新文件，其中包含以下内容：
 
 ```swift
@@ -127,12 +107,10 @@ public struct Bitmap {
 }
 ```
 
-You'll notice that `Bitmap` stores its pixels in a flat array instead of a 2D matrix as you might expect. This is mainly for efficiency - allocating a flat array like this means that the pixels will be stored contiguously in a single block of memory instead of each row or column being allocated separately on the heap.
 您会注意到`Bitmap`将其像素存储在一个一纬数组中，而不是像你可能期望的那样将其存储在二维矩阵中。这样做的主要原因是为了提高效率——像这样的一维数组的内存分配方式，意味着像素将连续存储在单个内存块中，而不是在堆上单独为每个行或列分配内存。
-In performance-critical code, consideration of memory layout is important to avoid cache-misses, which occur when the program is forced to page in new data from main memory instead of the much-faster [processor cache](https://en.wikipedia.org/wiki/CPU_cache).
+
 在性能很关键的代码中，考虑内存布局，对于避免缓存未命中至关重要。当程序被强制从主内存，而不是更快的[处理器缓存](https://en.wikipedia.org/wiki/CPU_cache)中获取新数据时就发生了缓存未命中。
 
-Accessing a 2D image using a one-dimensional index (and having to compute the row offsets each time) isn't very ergonomic though, so lets add a 2D subscript. While we're at it, let's also add a computed property for the image height, and a convenience initializer for creating an empty image:
 使用一维索引访问2D图像（每次必须计算行偏移）不是很符合一般的思维逻辑，所以我们为该类将添加一个2D下标脚本（subscript）。顺道，我们为图像的高度添加一个计算属性，并添加一个便利的initializer，用于创建一张空白的图像：
 
 ```swift
@@ -153,10 +131,8 @@ public extension Bitmap {
 }
 ```
 
-The subscript takes an X and Y coordinate within the image and does some math to compute the offset into the flat `pixels` array. The code assumes that the pixels are stored in row order rather than column order (which is the convention on most platforms, including iOS), but this assumption is not exposed in the public interface, so we can change it later if necessary.
 下标脚本方法接收图像中的X和Y坐标，并进行一些数学运算来计算一维`像素`数组的偏移量。这段代码假设像素是按行顺序而不是列顺序存储的（这是大多数平台上的约定，包括iOS），但这种假定没有在公共接口中暴露出来，因此我们可以在以后必要时进行更改。
 
-Add a new file to the main app target called `UIImage+Bitmap.swift` with the following contents:
 添加一个新文件`UIImage+Bitmap.swift`到主应用中，内容如下：
 
 ```swift
@@ -196,21 +172,21 @@ extension UIImage {
 }
 ```
 
-Notice that the file imports both UIKit and the Engine module - that's a good clue as to its purpose, which is to act as a bridge between UIKit and the game engine. Specifically, it provides a way to take a `Bitmap` and turn it into a `UIImage` for display on screen.
+你可能会注意到这个文件同时引入了UIKit和Engine模块——这很好的表明了该文件的意图，它充当了UIKit和游戏引擎之间的桥梁。具体一点，它可以接受`Bitmap`并将之转化为一个`UIImage`从而在屏幕上显示出来。
 
-We want this conversion process to be as cheap as possible since we're repeating it every frame. The `pixels` array already has the correct memory layout to be consumed directly by `CGImage`, so it's a simple copy without any need for per-pixel manipulation.
+我们希望这种转换过程尽可能的高效，原因是每一帧我们都会重复这个过程。`pixels`数组已经具备了可以被`CGImage`类直接消费的正确内存布局，所以只需要简单拷贝，而不需要任何针对单个像素的操作。
 
-Pay particular attention to this line:
+请格外注意这一行：
 
 ```swift
 let alphaInfo = CGImageAlphaInfo.premultipliedLast
 ```
 
-Usually in Swift, the order in which properties are declared in a struct doesn't matter very much. In this case though, we are relying on the order and alignment of the `r`, `g`, `b` and `a` properties of `Color` to match the format we specified for `alphaInfo`.
+通常在Swift中，结构体中声明的属性顺序并不重要。但是在当前情况下，我们依赖于`Color`的`r`，`g`，`b`和`a`属性的顺序和对齐，以匹配我们为`alphaInfo`指定的格式。
 
-The constant `premultipliedLast` specifies that the alpha value is stored *after* the RGB channels. It is common practice on iOS to use `premultipliedFirst` instead, and if we used that we would have to change the property order in our `Color` struct to `a, r, g, b` or our colors would be messed up.
+常量`premultipliedLast`指定了透明度通道位于RGB通道*之后*。 在iOS上更常见的做法是使用`premultipliedFirst`，但是如果我们使用它，我们就必须将`Color`结构体中的属性顺序更改为`a，r，g，b`，否则我们的颜色会乱套。
 
-Now we have all the pieces we need to display a `Bitmap` on the screen. Add the following code to `viewDidLoad()` in `ViewController.swift` (note that you need to add `import Engine` at the top of the file as well since the `Bitmap` type is defined in the Engine module):
+现在我们有了在屏幕上显示`Bitmap`所需的所有代码。将以下代码添加到`ViewController.swift`中的`viewDidLoad()`中（请注意，你需要在文件顶部添加`import Engine`，因为在`Bitmap`类型定义在Engine模块中）：
 
 ```swift
 import Engine
@@ -228,29 +204,29 @@ override func viewDidLoad() {
 }
 ```
 
-This code creates a new 8x8 `Bitmap` filled with white, and then sets the pixel at 0,0 (the top-left corner) to blue. The result looks like this:
+以上的代码创建了一个新的8x8尺寸的`Bitmap`，填充为白色，接着将0,0(左上角)位置的像素设置为蓝色。结果看起来将像这样：
 
 ![A blurry blue pixel](Images/BlurryBluePixel.png)
 
-Now I know what you're thinking: *Why is it all blurry?*
+现在你一定在想：*为何如此模糊？*
 
-What you are seeing here is the modern miracle of [bilinear filtering](https://en.wikipedia.org/wiki/Bilinear_filtering). In the good old days, when computers were slow, when we expanded images on the screen we saw big square pixels<sup><a id="reference5"></a>[[5]](#footnote5)</sup> *and we liked it*. But in the mid-to-late '90s, as 3D graphics cards became popular and math became cheaper, bilinear filtering replaced the so-called [nearest-neighbor](https://en.wikipedia.org/wiki/Nearest-neighbor_interpolation) algorithm used previously.
+你看到的结果是现代技术[双线性过滤](https://en.wikipedia.org/wiki/Bilinear_filtering)的杰作。在美好的往昔，那时的计算机很慢，屏幕上展开的图像都成了一个个大大的方块像素<sup><a id="reference5"></a>[[5]](#footnote5)</sup>*我们挺满意*。但当时间来到90年代晚期，随着3D图形卡的普及、计算变得廉价，双线性过滤取代了之前使用的[最近邻算法](https://en.wikipedia.org/wiki/Nearest-neighbor_interpolation)。
 
-Bilinear filtering combines nearby pixel values, creating results that are interpolated rather than just sampled directly from the original image. When downscaling images this produces dramatically better results, because instead of pixels just disappearing as the output shrinks, their color still contributes to the final image. Unfortunately, when *upscaling* images - especially chunky pixel-art - the results tend to look like blurry garbage.
+双线性过滤算法将相邻的像素值组合产生插值结果，而不直接从原始图像中采样。对图像进行缩放时，算法的效果很好，因为像素并没有随着输出的收缩而消失，最终的图像仍可受益于这些像素的颜色特征。不幸的是，当*放大*图像时 - 特别是粗糙的像素艺术 - 最终结果往往看起来像是一团浆糊。
 
-To solve this, add the following line to the end of `ViewController.setUpImageView()`:
+为了解决这个问题，请将下面这行代码添加到`ViewController.setUpImageView()`的末尾：
 
 ```swift
 imageView.layer.magnificationFilter = .nearest
 ```
 
-That tells the `UIImageView` to use the nearest-neighbor algorithm when magnifying an image instead of bilinear filtering (which is the default for both upscaling and downscaling). Run the app again and the blurriness should be gone.
+上面的代码指示`UIImageView`使用最近邻算法而不是双线性过滤来放大图像（这个将作用于放大和缩小）。再次运行程序，模糊应该已经消失了。
 
 ![A sharp blue pixel](Images/SharpBluePixel.png)
 
-### Inversion of Control
+### 控制反转
 
-Right now our drawing logic lives in the platform layer, which is kind of backwards. The game engine should be responsible for the drawing, not the platform. Create a new file called `Renderer.swift` in the Engine module with the following contents:
+直到现在，我们的绘图逻辑依然放在平台层中，这是一个弊端。游戏引擎应该负责绘图，而不是平台。在Engine模块中创建一个名为`Renderer.swift`的新文件，其中包含以下内容：
 
 ```swift
 public struct Renderer {
@@ -269,7 +245,7 @@ public extension Renderer {
 
 ```
 
-Then in `ViewController.viewDidLoad()` replace the lines:
+然后将`ViewController.viewDidLoad()`中的以下内容：
 
 ```swift
 var bitmap = Bitmap(width: 8, height: 8, color: .white)
@@ -278,7 +254,7 @@ bitmap[0, 0] = .blue
 imageView.image = UIImage(bitmap: bitmap)
 ```
 
-with:
+替换为:
 
 ```swift
 var renderer = Renderer(width: 8, height: 8)
@@ -287,25 +263,25 @@ renderer.draw()
 imageView.image = UIImage(bitmap: renderer.bitmap)
 ```
 
-Run it again, and the result should look the same as before.
+再次运行，结果应该和之前一样。
 
-### Loop-the-Loop
+### 进入循环
 
-That's all very well, but one static pixel is hardly a game. In a game, things change over time, even when the player isn't doing anything. This is different from a typical GUI application where the app spends most of its time sitting idle, waiting for user input.
+目前为止一切都挺好,但是一个静态像素很难称之为一个游戏。游戏中，就算玩家没有做任何事，事物也会随着时间的推移而发生变化。这是游戏和传统的GUI应用很不一样的一点——GUI应用在大部分时间都处于空闲状态，等待着用户输入。
 
-Right now we just draw one screen and then stop. In a real game, everything happens in a loop called the *game loop*. Game loops are usually driven in sync with the display's [refresh rate](https://en.wikipedia.org/wiki/Refresh_rate).
+现在我们只绘制了一次屏幕然后就停了。在真实的游戏中，一切都发生在称为*游戏循环*的循环中。游戏循环通常与显示器的[刷新率]（https://en.wikipedia.org/wiki/Refresh_rate）同步。
 
-In the early days of home computing, computer monitors used a scanning electron beam to stimulate phosphorescent paint on the inside of the glass screen. The rate at which that beam could scan across the entire screen was called the *refresh rate* - typically 50 Hz (PAL) or 60 Hz (NTSC).
+早期的家用计算机显示器使用扫描电子束来刺激玻璃屏幕内部的磷光涂料，该光束扫过整个屏幕的速率称为*刷新率* ——通常为50 Hz（PAL）或60 Hz（NTSC）。
 
-Early graphics cards did little more than expose a pixel buffer into which apps and games could draw their interface. If you timed your drawing at the wrong point in the beam cycle, the image would flicker, which is why it was important for game loops to be synchronized to the refresh rate.
+早期的图形卡会暴露一个像素缓冲区，让应用程序和游戏可以在其中绘制界面，除此之外，并没有做太多的事。如果你在光束周期中错误的时间点进行图像绘制，图像会闪烁，这是为何同步游戏循环和刷新率很重要的一个原因。
 
-Modern LCD or OLED screens no longer have a scanning beam, but they still have a finite rate at which data can be streamed into and out of video memory. Thanks to [double buffering](https://en.wikipedia.org/wiki/Multiple_buffering#Double_buffering_in_computer_graphics) we no longer have to worry about flickering and tearing, but we still need to synchronize our drawing to the refresh rate in order to achieve smooth animations.
+现代的LCD或OLED屏幕已不再具有扫描光束，但他们的刷新率仍是有限的，在该速率下数据可以流入和流出显存。 感谢[双缓冲]（https://en.wikipedia.org/wiki/Multiple_buffering#Double_buffering_in_computer_graphics），我们不再需要担心闪烁和撕裂，但我们仍需要将绘图频率与刷新率同步才能实现顺畅的动画。
 
-If we redraw the interface too frequently then we'll waste cycles on drawing that will never be seen. If we redraw too slowly then the screen will appear frozen. If we redraw slightly out of step with the refresh, objects will appear to stutter as they move across the screen. Most iOS developers have experienced the *jerky scrolling* that arises when a `UITableView` takes too long to redraw its cells.
+如果我们过于频繁地重绘界面，那么我们将会绘制一些我们永远看不到的帧。如果我们重绘的太慢，画面会看起来好像卡顿了。如果重绘的速度稍微慢于屏幕刷新率，则对象在屏幕上移动时会出现断断续续的情况。大多数iOS开发人员都经历过`UITableView`重绘单元格太慢时发生的* 滚动卡顿*现象。
 
-In single-threaded, single-process operating systems like DOS, the game loop was an actual `while` loop, repeatedly scanning for user input, running the game logic, then redrawing the screen. Modern operating systems like iOS have a lot of things going on in parallel, and blocking the main thread is a big no-no. So instead of a loop, we use a *timer*, which calls our update logic at a specified frequency, handing back control to the OS while it's waiting.
+在类似DOS这样的单线程，单进程操作系统中，游戏循环实际上就是一个`while`循环，反复扫描用户输入，运行游戏逻辑，接着重新绘制屏幕。像iOS这样的现代操作系统会并发做很多事情，阻塞主线程是一个很大的禁忌。因此，我们使用*timer*来代替循环，它会以指定的频率调用我们的更新逻辑，在等待时将控制权交还给操作系统。
 
-In iOS, the recommended way to synchronize code execution to the screen refresh is to use `CADisplayLink`. `CADisplayLink` is a special type of timer whose period is always an exact multiple of the refresh rate (typically 60 Hz, although some modern iOS devices can manage 120 Hz).
+在iOS中，将代码执行与屏幕刷新同步的推荐是使用`CADisplayLink`。 `CADisplayLink`是一种特殊类型的计时器，其周期始终是刷新率的精确倍数（通常为60 Hz，尽管一些现代iOS设备可以跑到120 Hz）。
 
 Unlike `Timer`, `CADisplayLink` doesn't have a Swift-friendly, closure-based API, so we need to use the target/selector pattern. Add the following method to `ViewController` (Note the `@objc` annotation, which is needed for the selector binding to work):
 
